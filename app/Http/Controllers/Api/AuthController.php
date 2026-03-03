@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Carbon\Carbon;
 
 class AuthController extends Controller
 {
@@ -35,17 +36,32 @@ class AuthController extends Controller
     }
 
    public function login(Request $request)
-    {
-        $user = User::where('email', $request->email)->first();
+{
+    $user = User::where('email', $request->email)->first();
 
-        if(!$user || !Hash::check($request->password, $user->password)){
-            return response()->json(['message'=>'Invalid credentials'],401);
-        }
-
-        $token = $user->createToken('auth_token')->plainTextToken;
-
-        return response()->json([
-            'token' => $token
-        ]);
+    if(!$user || !Hash::check($request->password, $user->password)){
+        return response()->json(['message'=>'Invalid credentials'],401);
     }
+
+    // Créer le token
+    $tokenResult = $user->createToken('api-token');
+    $plainTextToken = $tokenResult->plainTextToken;
+
+    // Récupérer le token en base
+    $accessToken = $tokenResult->accessToken;
+    $accessToken->expires_at = now()->addMinute(); // expire dans 1 minute
+    $accessToken->save();
+
+    return response()->json([
+        'token' => $plainTextToken,
+        'expires_at' => $accessToken->expires_at
+    ]);
+}
+    public function logout(Request $request)
+{
+    // Supprime le token qui a été utilisé pour l'auth
+    $request->user()->currentAccessToken()->delete();
+
+    return response()->json(['message' => 'Logout successful']);
+}
 }
