@@ -42,7 +42,9 @@ public function index()
         $validated['slug']        = Str::slug($validated['title']);
 
         if ($request->hasFile('image')) {
-            $validated['image'] = $request->file('image')->store('events', 'public');
+            $filename = preg_replace('/[^a-zA-Z0-9\-_\.]/','', $request->file('image')->getClientOriginalName());
+            $path = $request->file('image')->storeAs('events', $filename, 'public');
+            $validated['image'] = $path;
         }
 
         $event = Event::create($validated);
@@ -89,7 +91,9 @@ public function index()
         }
 
         if ($request->hasFile('image')) {
-            $validated['image'] = $request->file('image')->store('events', 'public');
+            $filename = preg_replace('/[^a-zA-Z0-9\-_\.]/','', $request->file('image')->getClientOriginalName());
+            $path = $request->file('image')->storeAs('events', $filename, 'public');
+            $validated['image'] = $path;
         }
 
         $event->update($validated);

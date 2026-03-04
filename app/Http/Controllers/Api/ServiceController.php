@@ -37,7 +37,9 @@ class ServiceController extends Controller
         $validated['status']      = $validated['status'] ?? 'draft';
 
         if ($request->hasFile('image')) {
-            $validated['image'] = $request->file('image')->store('services','public');
+            $filename = preg_replace('/[^a-zA-Z0-9\-_\.]/','', $request->file('image')->getClientOriginalName());
+            $path = $request->file('image')->storeAs('events', $filename, 'public');
+            $validated['image'] = $path;
         }
 
         $service = Service::create($validated);
@@ -81,7 +83,9 @@ class ServiceController extends Controller
         }
 
         if ($request->hasFile('image')) {
-            $validated['image'] = $request->file('image')->store('services','public');
+            $filename = preg_replace('/[^a-zA-Z0-9\-_\.]/','', $request->file('image')->getClientOriginalName());
+            $path = $request->file('image')->storeAs('events', $filename, 'public');
+            $validated['image'] = $path;
         }
 
         $service->update($validated);

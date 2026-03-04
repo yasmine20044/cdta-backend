@@ -53,7 +53,9 @@ class PageController extends Controller
 
         // Gestion image
         if ($request->hasFile('image')) {
-            $validated['image'] = $request->file('image')->store('pages','public');
+            $filename = preg_replace('/[^a-zA-Z0-9\-_\.]/','', $request->file('image')->getClientOriginalName());
+            $path = $request->file('image')->storeAs('events', $filename, 'public');
+            $validated['image'] = $path;
         }
 
         $page = Page::create($validated);
@@ -85,7 +87,9 @@ class PageController extends Controller
 
         // Gestion image
         if ($request->hasFile('image')) {
-            $validated['image'] = $request->file('image')->store('pages','public');
+            $filename = preg_replace('/[^a-zA-Z0-9\-_\.]/','', $request->file('image')->getClientOriginalName());
+            $path = $request->file('image')->storeAs('events', $filename, 'public');
+            $validated['image'] = $path;
         }
 
         $page->update($validated);

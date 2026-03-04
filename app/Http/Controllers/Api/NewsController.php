@@ -52,7 +52,9 @@ class NewsController extends Controller
     $validated['published_at'] = now();
 
     if ($request->hasFile('image')) {
-        $validated['image'] = $request->file('image')->store('news','public');
+        $filename = preg_replace('/[^a-zA-Z0-9\-_\.]/','', $request->file('image')->getClientOriginalName());
+        $path = $request->file('image')->storeAs('events', $filename, 'public');
+        $validated['image'] = $path;
     }
 
     $news = News::create($validated);
@@ -89,7 +91,9 @@ class NewsController extends Controller
     $validated['slug'] = Str::slug($cleanTitle);
 }
     if ($request->hasFile('image')) {
-        $validated['image'] = $request->file('image')->store('news','public');
+       $filename = preg_replace('/[^a-zA-Z0-9\-_\.]/','', $request->file('image')->getClientOriginalName());
+       $path = $request->file('image')->storeAs('events', $filename, 'public');
+       $validated['image'] = $path;
     }
 
     $news->update($validated);
