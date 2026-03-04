@@ -49,7 +49,7 @@ class AuthController extends Controller
 
     // Récupérer le token en base
     $accessToken = $tokenResult->accessToken;
-    $accessToken->expires_at = now()->addMinute(); // expire dans 1 minute
+    $accessToken->expires_at = now()->addHours(24); // expire dans 24 heures
     $accessToken->save();
 
     return response()->json([

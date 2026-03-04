@@ -8,76 +8,92 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
 use Mews\Purifier\Facades\Purifier;
-
+ use Illuminate\Support\Facades\Cache;
 
 
 class NewsController extends Controller
 {
-    public function index() { return response()->json(News::all()); }
+    public function index()
+{
+    return Cache::remember('news_all', 60, function () {
+        return News::all();
+    });
+}
     public function show($id) { 
         $news = News::find($id);
         if(!$news) return response()->json(['message'=>'News not found'],404);
         return response()->json($news);
     }
-    public function store(Request $request) {
-        $v = Validator::make($request->all(), [
-            'title'=>'required|string|max:255',
-            'content'=>'required|string',
-            'status'=>'in:draft,published'
-        ]);
-        if($v->fails()) return response()->json($v->errors(),422);
 
-        $imagePath = null;
-
-if($request->hasFile('image')){
-    $imagePath = $request->file('image')->store('news','public');
-}
-
-        $news = News::create([
-    'title' => $request->title,
-    'slug' => Str::slug($request->title),
-    'content' => Purifier::clean($request->content),
-    'status' => $request->status ?? 'draft',
-    'excerpt' => $request->excerpt,
-    'author' => $request->author ?? 'CDTA',
-    'published_at' => now(),
-    'category' => $request->category,
-    'image' => $imagePath
-]);
-        return response()->json($news,201);
-    }
-   public function update(Request $request,$id) {
-
-    $news = News::find($id);
-    if(!$news) return response()->json(['message'=>'News not found'],404);
-
-    $v = Validator::make($request->all(), [
-        'title'=>'string|max:255',
-        'content'=>'string',
-        'status'=>'in:draft,published'
+    //store
+    public function store(Request $request)
+{
+    $validated = $request->validate([
+        'title' => 'required|string|max:255',
+        'content' => 'required|string',
+        'status' => 'in:draft,published',
+        'excerpt' => 'nullable|string|max:500',
+        'author' => 'nullable|string|max:255',
+        'category' => 'nullable|string|max:100',
+        'image' => 'nullable|image|mimes:jpg,jpeg,png|max:2048'
     ]);
 
-    if($v->fails()) return response()->json($v->errors(),422);
-
-    if($request->title){
-        $news->title = $request->title;
-        $news->slug = Str::slug($request->title);
+    foreach (['content','excerpt','author','category'] as $field) {
+        if (isset($validated[$field])) {
+            $validated[$field] = Purifier::clean($validated[$field]);
+        }
     }
 
-    if($request->hasFile('image')){
-        $imagePath = $request->file('image')->store('news','public');
-        $news->image = $imagePath;
+   $validated['title'] = strip_tags($validated['title']);  
+   
+   $validated['slug']  = Str::slug($validated['title']);
+    $validated['status'] = $validated['status'] ?? 'draft';
+    $validated['author'] = $validated['author'] ?? 'CDTA';
+    $validated['published_at'] = now();
+
+    if ($request->hasFile('image')) {
+        $validated['image'] = $request->file('image')->store('news','public');
     }
 
-    if($request->content){
-    $news->content = strip_tags($request->content);
+    $news = News::create($validated);
+    Cache::forget('news_all');
+
+    return response()->json($news, 201);
+
 }
-    if($request->status) $news->status = $request->status;
-    if($request->excerpt) $news->excerpt = $request->excerpt;
-    if($request->author) $news->author = $request->author;
-    if($request->category) $news->category = $request->category;
 
-    $news->save();
+//update
+   public function update(Request $request, $id)
+{
+    $news = News::findOrFail($id);
+
+    $validated = $request->validate([
+        'title' => 'sometimes|string|max:255',
+        'content' => 'sometimes|string',
+        'status' => 'sometimes|in:draft,published',
+        'excerpt' => 'nullable|string|max:500',
+        'author' => 'nullable|string|max:255',
+        'category' => 'nullable|string|max:100',
+        'image' => 'nullable|image|mimes:jpg,jpeg,png|max:2048'
+    ]);
+
+    foreach (['title','content','excerpt','author','category'] as $field) {
+        if (isset($validated[$field])) {
+            $validated[$field] = Purifier::clean($validated[$field]);
+        }
+    }
+
+    if (isset($validated['title'])) {
+    $cleanTitle = strip_tags($validated['title']);  // aucun HTML
+    $validated['title'] = $cleanTitle;
+    $validated['slug'] = Str::slug($cleanTitle);
+}
+    if ($request->hasFile('image')) {
+        $validated['image'] = $request->file('image')->store('news','public');
+    }
+
+    $news->update($validated);
+    Cache::forget('news_all');
 
     return response()->json($news);
 }
@@ -85,6 +101,7 @@ if($request->hasFile('image')){
         $news = News::find($id);
         if(!$news) return response()->json(['message'=>'News not found'],404);
         $news->delete();
+        Cache::forget('news_all');
         return response()->json(['message'=>'News deleted successfully']);
     }
 }

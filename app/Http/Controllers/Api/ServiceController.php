@@ -6,41 +6,42 @@ use App\Http\Controllers\Controller;
 use App\Models\Service;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
-use Illuminate\Support\Facades\Validator;
 use Mews\Purifier\Facades\Purifier;
+ use Illuminate\Support\Facades\Cache;
 
 class ServiceController extends Controller
 {
     // Lister tous les services
-    public function index()
-    {
-        return response()->json(Service::all());
-    }
+   public function index()
+{
+    return Cache::remember('services_all', 60, function () {
+        return Service::all();
+    });
+}
 
     // Créer un service
     public function store(Request $request)
     {
-        $validator = Validator::make($request->all(), [
-            'title' => 'required|string|max:255',
+        $validated = $request->validate([
+            'title'       => 'required|string|max:255',
             'description' => 'required|string',
-            'status' => 'in:draft,published'
+            'status'      => 'in:draft,published',
+            'image'       => 'nullable|image|mimes:jpg,jpeg,png|max:2048'
         ]);
 
-        if ($validator->fails()) 
-            return response()->json($validator->errors(), 422);
-
-        // Nettoyage XSS
-        $data = $request->only(['title','description','status']);
-        $data['title'] = strip_tags($data['title']);               // Supprime tous les scripts dans le title
-        $data['description'] = Purifier::clean($data['description']); // Supprime les scripts dangereux dans description
-        $data['slug'] = Str::slug($data['title']);
+        // Nettoyage
+        $validated['description'] = Purifier::clean($validated['description']); // garde HTML safe
+        $validated['title']       = strip_tags($validated['title']);             // aucun HTML
+        $validated['status']      = strip_tags($validated['status']);
+        $validated['slug']        = Str::slug($validated['title']);
+        $validated['status']      = $validated['status'] ?? 'draft';
 
         if ($request->hasFile('image')) {
-            $data['image'] = $request->file('image')->store('services', 'public');
+            $validated['image'] = $request->file('image')->store('services','public');
         }
 
-        $service = Service::create($data);
-
+        $service = Service::create($validated);
+        Cache::forget('services_all');
         return response()->json($service, 201);
     }
 
@@ -56,38 +57,35 @@ class ServiceController extends Controller
     // Mettre à jour un service
     public function update(Request $request, $id)
     {
-        $service = Service::find($id);
-        if (!$service) return response()->json(['message' => 'Service not found'], 404);
+        $service = Service::findOrFail($id);
 
-        $validator = Validator::make($request->all(), [
-            'title' => 'string|max:255',
-            'description' => 'string',
-            'status' => 'in:draft,published'
+        $validated = $request->validate([
+            'title'       => 'sometimes|string|max:255',
+            'description' => 'sometimes|string',
+            'status'      => 'sometimes|in:draft,published',
+            'image'       => 'nullable|image|mimes:jpg,jpeg,png|max:2048'
         ]);
 
-        if ($validator->fails()) return response()->json($validator->errors(), 422);
-
-        $data = [];
-
-        if ($request->title) {
-            $data['title'] = strip_tags($request->title);
-            $data['slug'] = Str::slug($data['title']);
+        if (isset($validated['description'])) {
+            $validated['description'] = Purifier::clean($validated['description']);
         }
 
-        if ($request->description) {
-            $data['description'] = Purifier::clean($request->description);
+        foreach (['title','status'] as $field) {
+            if (isset($validated[$field])) {
+                $validated[$field] = strip_tags($validated[$field]);
+            }
         }
 
-        if ($request->status) {
-            $data['status'] = $request->status;
+        if (isset($validated['title'])) {
+            $validated['slug'] = Str::slug($validated['title']);
         }
 
         if ($request->hasFile('image')) {
-            $data['image'] = $request->file('image')->store('services', 'public');
+            $validated['image'] = $request->file('image')->store('services','public');
         }
 
-        $service->update($data);
-
+        $service->update($validated);
+        Cache::forget('services_all');
         return response()->json($service);
     }
 
@@ -98,7 +96,7 @@ class ServiceController extends Controller
         if (!$service) return response()->json(['message' => 'Service not found'], 404);
 
         $service->delete();
-
+        Cache::forget('services_all');
         return response()->json(['message' => 'Service deleted successfully']);
     }
 }

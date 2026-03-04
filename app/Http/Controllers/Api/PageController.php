@@ -6,17 +6,19 @@ use App\Http\Controllers\Controller;
 use App\Models\Page;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
-use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
 use Mews\Purifier\Facades\Purifier;
+ use Illuminate\Support\Facades\Cache;
 
 class PageController extends Controller
 {
     // Lister toutes les pages
-    public function index()
-    {
-        return response()->json(Page::all());
-    }
+   public function index()
+{
+    return Cache::remember('pages_all', 60, function () {
+        return Page::all();
+    });
+}
 
     // Voir une page spécifique
     public function show($id)
@@ -30,61 +32,64 @@ class PageController extends Controller
     // Créer une page
     public function store(Request $request)
     {
-        $validator = Validator::make($request->all(), [
-            'title' => 'required|string|max:255',
+        $validated = $request->validate([
+            'title'   => 'required|string|max:255',
             'content' => 'required|string',
-            'status' => 'in:draft,published'
+            'status'  => 'in:draft,published',
+            'image'   => 'nullable|image|mimes:jpg,jpeg,png|max:2048'
         ]);
 
-        if ($validator->fails()) return response()->json($validator->errors(), 422);
-
-        $imagePath = null;
-        if ($request->hasFile('image')) {
-            $imagePath = $request->file('image')->store('pages', 'public');
+        // Nettoyage
+        if (isset($validated['content'])) {
+            $validated['content'] = Purifier::clean($validated['content']); // HTML safe
         }
-          
-        $page = Page::create([
-            'title' => $request->title,
-            'slug' => Str::slug($request->title),
-            'content' => Purifier::clean($request->content),
-            'status' => $request->status ?? 'draft',
-            'image' => $imagePath
-        ]);
 
+        if (isset($validated['title'])) {
+            $validated['title'] = strip_tags($validated['title']); // aucun HTML
+            $validated['slug']  = Str::slug($validated['title']);
+        }
+
+        $validated['status'] = $validated['status'] ?? 'draft';
+
+        // Gestion image
+        if ($request->hasFile('image')) {
+            $validated['image'] = $request->file('image')->store('pages','public');
+        }
+
+        $page = Page::create($validated);
+        Cache::forget('pages_all');
         return response()->json($page, 201);
     }
 
     // Modifier une page
     public function update(Request $request, $id)
     {
-        $page = Page::find($id);
-        if (!$page) return response()->json(['message' => 'Page not found'], 404);
+        $page = Page::findOrFail($id);
 
-        $validator = Validator::make($request->all(), [
-            'title' => 'string|max:255',
-            'content' => 'string',
-            'status' => 'in:draft,published'
+        $validated = $request->validate([
+            'title'   => 'sometimes|string|max:255',
+            'content' => 'sometimes|string',
+            'status'  => 'sometimes|in:draft,published',
+            'image'   => 'nullable|image|mimes:jpg,jpeg,png|max:2048'
         ]);
 
-        if ($validator->fails()) return response()->json($validator->errors(), 422);
-
-        if ($request->title) {
-            $page->title = $request->title;
-            $page->slug = Str::slug($request->title);
+        // Nettoyage
+        if (isset($validated['content'])) {
+            $validated['content'] = Purifier::clean($validated['content']); // HTML safe
         }
 
-       if ($request->content){
-    $page->content = strip_tags($request->content);
-}
-        if ($request->status) $page->status = $request->status;
+        if (isset($validated['title'])) {
+            $validated['title'] = strip_tags($validated['title']); // aucun HTML
+            $validated['slug']  = Str::slug($validated['title']);
+        }
 
+        // Gestion image
         if ($request->hasFile('image')) {
-            $imagePath = $request->file('image')->store('pages', 'public');
-            $page->image = $imagePath;
+            $validated['image'] = $request->file('image')->store('pages','public');
         }
 
-        $page->save();
-
+        $page->update($validated);
+        Cache::forget('pages_all');
         return response()->json($page);
     }
 
@@ -95,6 +100,7 @@ class PageController extends Controller
         if (!$page) return response()->json(['message' => 'Page not found'], 404);
 
         $page->delete();
+        Cache::forget('pages_all');
         return response()->json(['message' => 'Page deleted successfully']);
     }
 }
