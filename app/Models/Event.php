@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Support\Facades\Crypt;
 
 class Event extends Model
@@ -20,17 +19,19 @@ class Event extends Model
         'image'
     ];
 
+    // Chiffre automatiquement la description avant insertion
     public function setDescriptionAttribute($value)
-{
-    $this->attributes['description'] = Crypt::encryptString($value);
-}
-
-public function getDescriptionAttribute($value)
-{
-    try {
-        return Crypt::decryptString($value);
-    } catch (\Illuminate\Contracts\Encryption\DecryptException $e) {
-        return $value;
+    {
+        $this->attributes['description'] = Crypt::encryptString($value);
     }
-}
+
+    // Déchiffre automatiquement la description à la lecture
+    public function getDescriptionAttribute($value)
+    {
+        try {
+            return Crypt::decryptString($value);
+        } catch (\Illuminate\Contracts\Encryption\DecryptException $e) {
+            return $value;
+        }
+    }
 }

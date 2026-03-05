@@ -8,28 +8,38 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Storage;
 use Mews\Purifier\Facades\Purifier;
- use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 
 class PageController extends Controller
 {
-    // Lister toutes les pages
-   public function index()
-{
-    return Cache::remember('pages_all', 60, function () {
-        return Page::all();
-    });
-}
 
-    // Voir une page spécifique
+    // GET ALL
+    public function index()
+    {
+        return Cache::remember('pages_all', 60, function () {
+            return Page::all();
+        });
+    }
+
+    // GET ONE
     public function show($id)
     {
         $page = Page::find($id);
-        if (!$page) return response()->json(['message' => 'Page not found'], 404);
+
+        if (!$page) {
+            return response()->json(['message' => 'Page not found'], 404);
+        }
+
+        Log::info('Page consultée', [
+            'id' => $id,
+            'user_id' => auth()->id()
+        ]);
 
         return response()->json($page);
     }
 
-    // Créer une page
+    // CREATE
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -39,31 +49,34 @@ class PageController extends Controller
             'image'   => 'nullable|image|mimes:jpg,jpeg,png|max:2048'
         ]);
 
-        // Nettoyage
-        if (isset($validated['content'])) {
-            $validated['content'] = Purifier::clean($validated['content']); // HTML safe
-        }
-
-        if (isset($validated['title'])) {
-            $validated['title'] = strip_tags($validated['title']); // aucun HTML
-            $validated['slug']  = Str::slug($validated['title']);
-        }
-
+        $validated['title'] = strip_tags($validated['title']);
+        $validated['content'] = Purifier::clean($validated['content']);
+        $validated['slug'] = Str::slug($validated['title']);
         $validated['status'] = $validated['status'] ?? 'draft';
 
-        // Gestion image
         if ($request->hasFile('image')) {
-            $filename = preg_replace('/[^a-zA-Z0-9\-_\.]/','', $request->file('image')->getClientOriginalName());
-            $path = $request->file('image')->storeAs('events', $filename, 'public');
+
+            $filename = Str::uuid().'.'.$request->file('image')->getClientOriginalExtension();
+
+            $path = $request->file('image')->storeAs('pages', $filename, 'public');
+
             $validated['image'] = $path;
         }
 
         $page = Page::create($validated);
+
         Cache::forget('pages_all');
+
+        Log::info('Page créée', [
+            'id' => $page->id,
+            'title' => $page->title,
+            'user_id' => auth()->id()
+        ]);
+
         return response()->json($page, 201);
     }
 
-    // Modifier une page
+    // UPDATE
     public function update(Request $request, $id)
     {
         $page = Page::findOrFail($id);
@@ -71,40 +84,106 @@ class PageController extends Controller
         $validated = $request->validate([
             'title'   => 'sometimes|string|max:255',
             'content' => 'sometimes|string',
-            'status'  => 'sometimes|in:draft,published',
-            'image'   => 'nullable|image|mimes:jpg,jpeg,png|max:2048'
+            'status'  => 'sometimes|in:draft,published'
         ]);
 
-        // Nettoyage
-        if (isset($validated['content'])) {
-            $validated['content'] = Purifier::clean($validated['content']); // HTML safe
-        }
-
         if (isset($validated['title'])) {
-            $validated['title'] = strip_tags($validated['title']); // aucun HTML
-            $validated['slug']  = Str::slug($validated['title']);
+            $validated['title'] = strip_tags($validated['title']);
+            $validated['slug'] = Str::slug($validated['title']);
         }
 
-        // Gestion image
-        if ($request->hasFile('image')) {
-            $filename = preg_replace('/[^a-zA-Z0-9\-_\.]/','', $request->file('image')->getClientOriginalName());
-            $path = $request->file('image')->storeAs('events', $filename, 'public');
-            $validated['image'] = $path;
+        if (isset($validated['content'])) {
+            $validated['content'] = Purifier::clean($validated['content']);
         }
 
         $page->update($validated);
+
         Cache::forget('pages_all');
+
+        Log::info('Page mise à jour', [
+            'id' => $page->id,
+            'user_id' => auth()->id()
+        ]);
+
         return response()->json($page);
     }
 
-    // Supprimer une page
+    // UPDATE IMAGE
+    public function updateImage(Request $request, $id)
+    {
+        $page = Page::findOrFail($id);
+
+        $request->validate([
+            'image' => 'required|image|mimes:jpg,jpeg,png|max:2048'
+        ]);
+
+        if ($page->image && Storage::disk('public')->exists($page->image)) {
+            Storage::disk('public')->delete($page->image);
+        }
+
+        $filename = Str::uuid().'.'.$request->file('image')->getClientOriginalExtension();
+
+        $path = $request->file('image')->storeAs('pages', $filename, 'public');
+
+        $page->image = $path;
+        $page->save();
+
+        Cache::forget('pages_all');
+
+        Log::info('Image page mise à jour', [
+            'id' => $page->id,
+            'user_id' => auth()->id()
+        ]);
+
+        return response()->json($page);
+    }
+    
+    public function deleteImage($id)
+{
+    $page = Page::findOrFail($id);
+
+    if ($page->image && Storage::disk('public')->exists($page->image)) {
+        Storage::disk('public')->delete($page->image);
+    }
+
+    $page->image = null;
+    $page->save();
+
+    Cache::forget('pages_all');
+
+    Log::info('Image page supprimée', [
+        'id' => $page->id,
+        'user_id' => auth()->id()
+    ]);
+
+    return response()->json([
+        'message' => 'Image supprimée avec succès'
+    ]);
+}
+    // DELETE
     public function destroy($id)
     {
         $page = Page::find($id);
-        if (!$page) return response()->json(['message' => 'Page not found'], 404);
+
+        if (!$page) {
+            return response()->json(['message' => 'Page not found'], 404);
+        }
+          // supprimer l'image si elle existe
+    if ($page->image && Storage::disk('public')->exists($page->image)) {
+        Storage::disk('public')->delete($page->image);
+    }
 
         $page->delete();
+
         Cache::forget('pages_all');
-        return response()->json(['message' => 'Page deleted successfully']);
+
+        Log::info('Page supprimée', [
+            'id' => $id,
+            'user_id' => auth()->id()
+        ]);
+
+        return response()->json([
+            'message' => 'Page deleted successfully'
+        ]);
     }
 }

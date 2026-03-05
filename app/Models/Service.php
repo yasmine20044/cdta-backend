@@ -12,21 +12,22 @@ class Service extends Model
         'title',
         'slug',
         'description',
+        'status',
         'image'
-        
     ];
 
+    // Chiffrement de description
     public function setDescriptionAttribute($value)
-{
-    $this->attributes['description'] = Crypt::encryptString($value);
-}
-
-public function getDescriptionAttribute($value)
-{
-    try {
-        return Crypt::decryptString($value);
-    } catch (\Illuminate\Contracts\Encryption\DecryptException $e) {
-        return $value;
+    {
+        $this->attributes['description'] = Crypt::encryptString($value);
     }
-}
+
+    public function getDescriptionAttribute($value)
+    {
+        try {
+            return Crypt::decryptString($value);
+        } catch (DecryptException $e) {
+            return $value;
+        }
+    }
 }

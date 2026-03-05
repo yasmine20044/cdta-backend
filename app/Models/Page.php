@@ -17,20 +17,21 @@ class Page extends Model
         'content',
         'status',
         'image'
-        
     ];
 
+    // encrypt content
     public function setContentAttribute($value)
-{
-    $this->attributes['content'] = Crypt::encryptString($value);
-}
-
-public function getContentAttribute($value)
-{
-    try {
-        return Crypt::decryptString($value);
-    } catch (\Illuminate\Contracts\Encryption\DecryptException $e) {
-        return $value;
+    {
+        $this->attributes['content'] = Crypt::encryptString($value);
     }
-}
+
+    // decrypt content
+    public function getContentAttribute($value)
+    {
+        try {
+            return Crypt::decryptString($value);
+        } catch (DecryptException $e) {
+            return $value;
+        }
+    }
 }

@@ -57,21 +57,27 @@ Route::middleware([SecureHeaders::class])->group(function () {
                 Route::post('/events', [EventController::class, 'store']);
                 Route::put('/events/{id}', [EventController::class, 'update']);
                 Route::delete('/events/{id}', [EventController::class, 'destroy']);
+                Route::post('/events/{id}/image', [EventController::class, 'updateImage']);
+                Route::delete('/events/{id}/image', [EventController::class, 'deleteImage']);
 
                 // PAGES
                 Route::post('/pages', [PageController::class, 'store']);
                 Route::put('/pages/{id}', [PageController::class, 'update']);
                 Route::delete('/pages/{id}', [PageController::class, 'destroy']);
-
+                Route::post('/pages/{id}/image', [PageController::class, 'updateImage']);
+                Route::delete('/pages/{id}/image', [PageController::class, 'deleteImage']);
                 // NEWS
                 Route::post('/news', [NewsController::class, 'store']);
                 Route::put('/news/{id}', [NewsController::class, 'update']);
                 Route::delete('/news/{id}', [NewsController::class, 'destroy']);
-
+                Route::post('/news/{id}/image', [NewsController::class, 'updateImage']);
+                Route::delete('/news/{id}/image', [NewsController::class, 'deleteImage']);
                 // SERVICES
                 Route::post('/services', [ServiceController::class, 'store']);
                 Route::put('/services/{id}', [ServiceController::class, 'update']);
                 Route::delete('/services/{id}', [ServiceController::class, 'destroy']);
+                Route::post('/services/{id}/image', [ServiceController::class, 'updateImage']);
+                Route::delete('/services/{id}/image', [ServiceController::class, 'deleteImage']);
             });
 
         //
