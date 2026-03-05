@@ -12,28 +12,30 @@ use Carbon\Carbon;
 class AuthController extends Controller
 {
    public function register(Request $request)
-    {
-        $validator = Validator::make($request->all(), [
-            'name' => 'required',
-            'email' => 'required|email|unique:users',
-            'password' => 'required|min:6'
-        ]);
+{
+    $validator = Validator::make($request->all(), [
+        'name' => 'required',
+        'email' => 'required|email|unique:users',
+        'password' => 'required|min:6',
+        'role' => 'nullable|in:admin,editor,user'
+    ]);
 
-        if ($validator->fails()) {
-            return response()->json($validator->errors(), 422);
-        }
-
-        User::create([
-    'name' => $request->name,
-    'email' => $request->email,
-    'password' => Hash::make($request->password),
-    'role' => $request->role ?? 'user'
-]);
-
-        return response()->json([
-            'message' => 'User created successfully'
-        ]);
+    if ($validator->fails()) {
+        return response()->json($validator->errors(), 422);
     }
+
+    User::create([
+        'name' => $request->name,
+        'email' => $request->email,
+        'password' => Hash::make($request->password),
+        'role' => $request->role ?? 'user'
+    ]);
+
+    return response()->json([
+        'message' => 'User created successfully'
+    ]);
+}
+
 
    public function login(Request $request)
 {
@@ -43,18 +45,12 @@ class AuthController extends Controller
         return response()->json(['message'=>'Invalid credentials'],401);
     }
 
-    // Créer le token
     $tokenResult = $user->createToken('api-token');
     $plainTextToken = $tokenResult->plainTextToken;
 
-    // Récupérer le token en base
-    $accessToken = $tokenResult->accessToken;
-    $accessToken->expires_at = now()->addHours(24); // expire dans 24 heures
-    $accessToken->save();
-
     return response()->json([
         'token' => $plainTextToken,
-        'expires_at' => $accessToken->expires_at
+        'expires_at' => now()->addMinutes(config('sanctum.expiration'))
     ]);
 }
     public function logout(Request $request)
